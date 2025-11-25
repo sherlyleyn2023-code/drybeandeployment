@@ -1,34 +1,35 @@
-import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
+import xgboost as xgb
+import streamlit as st
 
-st.title("Dry Bean Classification (Random Forest)")
+# --- Load dataset ---
+df = pd.read_excel("Dry_Bean_Dataset.xlsx")
 
-# Upload file Excel
-uploaded_file = st.file_uploader("Upload Dry_Bean_Dataset.xlsx", type="xlsx")
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+# Pisah fitur dan target
+X = df.drop("Class", axis=1)
+y = df["Class"]
 
-    X = df.drop("Class", axis=1)
-    y = df["Class"]
+# --- Train XGBoost model ---
+model = xgb.XGBClassifier(
+    n_estimators=500,
+    use_label_encoder=False,
+    eval_metric='mlogloss',
+    random_state=123
+)
+model.fit(X, y)
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+# --- Streamlit UI ---
+st.title("Dry Bean Classification (XGBoost)")
+st.write("Masukkan nilai fitur untuk prediksi satu data point:")
 
-    rf = RandomForestClassifier(n_estimators=500, random_state=123)
-    rf.fit(X_scaled, y)
+# Input user
+input_data = {col: st.number_input(col, float(df[col].median())) for col in X.columns}
 
-    st.write("Masukkan nilai fitur untuk prediksi:")
-    input_data = {}
-    for col in X.columns:
-        input_data[col] = st.number_input(col, float(df[col].median()))
-    
-    if st.button("Prediksi"):
-        input_df = pd.DataFrame([input_data])
-        input_scaled = scaler.transform(input_df)
-        pred_class = rf.predict(input_scaled)[0]
-        pred_proba = rf.predict_proba(input_scaled)
-        st.write(f"**Prediksi kelas:** {pred_class}")
-        st.dataframe(pd.DataFrame(pred_proba, columns=rf.classes_))
+if st.button("Prediksi"):
+    input_df = pd.DataFrame([input_data])
+    pred_class = model.predict(input_df)[0]
+    pred_proba = model.predict_proba(input_df)
+
+    st.write(f"**Prediksi kelas:** {pred_class}")
+    st.write("**Probabilitas masing-masing kelas:**")
+    st.dataframe(pd.DataFrame(pred_proba, columns=model.classes_))
