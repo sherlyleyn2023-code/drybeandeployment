@@ -1,35 +1,50 @@
+# app.py
 import pandas as pd
-import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import streamlit as st
 
-# --- Load dataset ---
-df = pd.read_excel("Dry_Bean_Dataset.xlsx")
+st.title("Dry Bean Classification (Random Forest)")
 
-# Pisah fitur dan target
-X = df.drop("Class", axis=1)
-y = df["Class"]
+# --- Upload dataset ---
+uploaded_file = st.file_uploader("Upload Dry Bean Excel (.xlsx)", type=["xlsx"])
+if uploaded_file:
+    try:
+        df = pd.read_excel(uploaded_file)
+    except Exception as e:
+        st.error(f"Gagal membaca file Excel: {e}")
+        st.stop()
 
-# --- Train XGBoost model ---
-model = xgb.XGBClassifier(
-    n_estimators=500,
-    use_label_encoder=False,
-    eval_metric='mlogloss',
-    random_state=123
-)
-model.fit(X, y)
+    st.success("Dataset berhasil di-upload!")
+    st.write("Preview data:")
+    st.dataframe(df.head())
 
-# --- Streamlit UI ---
-st.title("Dry Bean Classification (XGBoost)")
-st.write("Masukkan nilai fitur untuk prediksi satu data point:")
+    # --- Pisah fitur & target ---
+    X = df.drop("Class", axis=1)
+    y = df["Class"]
 
-# Input user
-input_data = {col: st.number_input(col, float(df[col].median())) for col in X.columns}
+    # --- Split train/test & scaling ---
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=123
+    )
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    rf = RandomForestClassifier(n_estimators=500, random_state=123)
+    rf.fit(X_train_scaled, y_train)
 
-if st.button("Prediksi"):
-    input_df = pd.DataFrame([input_data])
-    pred_class = model.predict(input_df)[0]
-    pred_proba = model.predict_proba(input_df)
+    st.write("Masukkan nilai fitur untuk prediksi satu data point:")
+    input_data = {}
+    for col in X.columns:
+        val = st.number_input(col, float(df[col].median()))
+        input_data[col] = val
 
-    st.write(f"**Prediksi kelas:** {pred_class}")
-    st.write("**Probabilitas masing-masing kelas:**")
-    st.dataframe(pd.DataFrame(pred_proba, columns=model.classes_))
+    if st.button("Prediksi"):
+        input_scaled = scaler.transform(pd.DataFrame([input_data]))
+        pred_class = rf.predict(input_scaled)[0]
+        pred_proba = rf.predict_proba(input_scaled)
+        st.write(f"**Prediksi kelas:** {pred_class}")
+        st.write("**Probabilitas masing-masing kelas:**")
+        st.dataframe(pd.DataFrame(pred_proba, columns=rf.classes_))
+else:
+    st.info("Silakan upload file Dry Bean Excel (.xlsx) untuk memulai.")
